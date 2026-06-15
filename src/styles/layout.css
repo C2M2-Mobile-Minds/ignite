@@ -1,0 +1,12 @@
+.layout-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+@media (min-width: 760px) {
+  .layout-wrapper {
+    padding: 0 30px;
+  }
+}
