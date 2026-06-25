@@ -22,8 +22,8 @@ Tem dois modos de utilização:
 | Framework | React (JSX, hooks) |
 | Estilo | CSS-in-JS inline + injeção de `<style>` no `<head>` |
 | Fontes | Google Fonts — Bebas Neue, Barlow, Barlow Condensed |
-| Persistência | `localStorage` (sem backend, sem base de dados) |
-| Deploy alvo | Vercel / Netlify (SPA estática) |
+| Persistência | Google Sheets via Apps Script (clientes) + `localStorage` para perfil/PIN |
+| Deploy alvo | GitHub Pages / SPA estática |
 | Formato de entrega | `.jsx` single-file, exportável como React artifact |
 
 Sem dependências externas além do React base. Sem Tailwind, sem UI libraries.
@@ -78,15 +78,18 @@ Menu flutuante (botão `⋯` canto inferior direito) permite mudar entre modos.
 
 ---
 
-## Persistência — localStorage
+## Persistência — Google Sheets + localStorage
 
-Três chaves:
+Os clientes são agora guardados remotamente numa folha do Google Sheets via um endpoint de Google Apps Script. O sheet permanece privado; o frontend envia apenas um POST ao script com um token secreto.
+
+O `localStorage` ainda é usado para:
 
 ```js
-"ignite_clients_v1"  // array de clientes submetidos
 "ignite_trainer_v1"  // objeto com dados do perfil do trainer
 "ignite_pin_v1"      // string com o PIN de 4 dígitos (padrão: "1234")
 ```
+
+O cliente remoto é gerido no arquivo `src/data/storage.js`.
 
 **Estrutura de um cliente:**
 ```json

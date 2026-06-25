@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { getTrainer, saveClients, getClients } from './data/storage';
+import { useEffect, useState } from 'react';
+import { getTrainer, getClients, saveClient, deleteClient } from './data/storage';
 import Landing from './components/Landing';
 import ClientForm from './components/ClientForm';
 import PinGate from './components/PinGate';
@@ -14,6 +14,24 @@ export default function App() {
   const [trainer, setTrainer] = useState(getTrainer());
   const [view, setView] = useState('landing');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadClients() {
+      try {
+        const data = await getClients();
+        setClients(data);
+      } catch (error) {
+        console.error('Failed to load clients:', error);
+        setClients([]);
+      } finally {
+        setClientsLoading(false);
+      }
+    }
+
+    loadClients();
+  }, []);
 
   function navigate(target) {
     setView(target);
@@ -26,6 +44,21 @@ export default function App() {
 
   function handleStartForm() {
     setView('form');
+  }
+
+  async function handleClientSaved(entry) {
+    setClients((current) => [entry, ...current]);
+    setView('landing');
+  }
+
+  async function handleClientDeleted(id) {
+    try {
+      await deleteClient(id);
+      setClients((current) => current.filter((client) => client.id !== id));
+      setView('editor');
+    } catch (error) {
+      console.error('Failed to delete client:', error);
+    }
   }
 
   return (
@@ -52,15 +85,16 @@ export default function App() {
       )}
 
       {view === 'landing' && <Landing trainer={trainer} onStart={handleStartForm} />}
-      {view === 'form' && <ClientForm trainer={trainer} onBack={() => navigate('landing')} />}
+      {view === 'form' && <ClientForm trainer={trainer} onBack={() => navigate('landing')} onSaved={handleClientSaved} />}
       {view === 'pin' && <PinGate onSuccess={() => navigate('editor')} />}
       {view === 'editor' && (
         <Editor
           trainer={trainer}
           setTrainer={setTrainer}
           onExit={handleExit}
-          clients={getClients()}
-          saveClients={saveClients}
+          clients={clients}
+          clientsLoading={clientsLoading}
+          onClientDeleted={handleClientDeleted}
         />
       )}
     </div>

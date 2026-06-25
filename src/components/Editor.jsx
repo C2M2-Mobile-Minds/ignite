@@ -1,16 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import IgniteLogo from './IgniteLogo';
 import SectionLabel from './SectionLabel';
 import Tag from './Tag';
 import { PrimaryButton, GhostButton } from './Button';
-import { saveTrainer, savePin } from '../data/storage';
+import { saveTrainer, savePin, getSheetConfig, saveSheetConfig } from '../data/storage';
 
-export default function Editor({ trainer, setTrainer, onExit, clients, saveClients }) {
+export default function Editor({ trainer, setTrainer, onExit, clients, clientsLoading, onClientDeleted }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [activeTab, setActiveTab] = useState('clients');
   const [draftTrainer, setDraftTrainer] = useState({ ...trainer });
   const [newPin, setNewPin] = useState('');
   const [saved, setSaved] = useState(false);
+  const [sheetConfig, setSheetConfig] = useState(getSheetConfig());
+  const [sheetConfigSaved, setSheetConfigSaved] = useState(false);
+
+  useEffect(() => {
+    setDraftTrainer({ ...trainer });
+  }, [trainer]);
 
   function handleSaveProfile() {
     saveTrainer(draftTrainer);
@@ -22,10 +28,17 @@ export default function Editor({ trainer, setTrainer, onExit, clients, saveClien
     setTimeout(() => setSaved(false), 2000);
   }
 
+  function handleSaveSheetConfig() {
+    saveSheetConfig(sheetConfig.url, sheetConfig.token);
+    setSheetConfigSaved(true);
+    setTimeout(() => setSheetConfigSaved(false), 2000);
+  }
+
   function deleteClient(id) {
     if (!window.confirm('Eliminar este cliente?')) return;
-    const updated = clients.filter((client) => client.id !== id);
-    saveClients(updated);
+    if (typeof onClientDeleted === 'function') {
+      onClientDeleted(id);
+    }
     setSelectedClient(null);
   }
 
@@ -260,6 +273,32 @@ export default function Editor({ trainer, setTrainer, onExit, clients, saveClien
                 value={newPin}
                 onChange={(event) => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
               />
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 18, marginTop: 8 }}>
+              <SectionLabel>Google Sheets</SectionLabel>
+              <p style={{ color: '#888', fontSize: 11, margin: '6px 0 12px', lineHeight: 1.6 }}>
+                Define o endpoint do Apps Script e o token secreto para guardar os clientes na tua folha.
+              </p>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <input
+                  className="input-field"
+                  placeholder="https://script.google.com/macros/s/ID/exec"
+                  value={sheetConfig.url}
+                  onChange={(event) => setSheetConfig((current) => ({ ...current, url: event.target.value }))}
+                />
+                <input
+                  className="input-field"
+                  placeholder="Token secreto"
+                  value={sheetConfig.token}
+                  onChange={(event) => setSheetConfig((current) => ({ ...current, token: event.target.value }))}
+                />
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <GhostButton onClick={handleSaveSheetConfig}>
+                  {sheetConfigSaved ? 'Guardado ✓' : 'Guardar Google Sheets'}
+                </GhostButton>
+              </div>
             </div>
 
             <PrimaryButton onClick={handleSaveProfile}>
