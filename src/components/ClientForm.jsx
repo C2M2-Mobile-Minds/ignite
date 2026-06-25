@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { GOALS, LOCATION_OPTIONS } from '../data/goals';
+import { saveClient } from '../data/storage';
 import IgniteLogo from './IgniteLogo';
 import SectionLabel from './SectionLabel';
 import { PrimaryButton, GhostButton } from './Button';
 
 const TOTAL_STEPS = 6;
+const MAX_DIFFICULTY_LENGTH = 500;
 const STEP_LABELS = ['Nome', 'Instagram', 'Telemóvel', 'Objetivos', 'Local de Treino', 'Dificuldade'];
 const STEP_QUESTIONS = [
   'Qual é o teu nome?',
@@ -25,20 +27,38 @@ const initialForm = {
   difficulty: '',
 };
 
+function validateInstagram(value) {
+  const username = value.replace(/^@/, '').trim();
+  return username.length > 0 && /^[a-zA-Z0-9._]{1,30}$/.test(username);
+}
+
+function validatePhone(value) {
+  const normalized = value.trim();
+  if (!normalized) return false;
+  if (!/^\+?[0-9\s().-]{7,20}$/.test(normalized)) return false;
+  const digits = normalized.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+}
+
+function validateDifficulty(value) {
+  return value.trim().length > 0 && value.trim().length <= MAX_DIFFICULTY_LENGTH;
+}
+
 function isStepValid(step, form) {
   if (step === 1) return form.firstName.trim() && form.lastName.trim();
-  if (step === 2) return form.instagram.trim();
-  if (step === 3) return form.phone.trim();
+  if (step === 2) return validateInstagram(form.instagram);
+  if (step === 3) return validatePhone(form.phone);
   if (step === 4) return form.goals.length > 0;
   if (step === 5) return Boolean(form.location);
-  if (step === 6) return form.difficulty.trim();
+  if (step === 6) return validateDifficulty(form.difficulty);
   return false;
 }
 
-export default function ClientForm({ trainer, onBack }) {
+export default function ClientForm({ trainer, onBack, onSaved }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
   const [finished, setFinished] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   function changeField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -65,16 +85,32 @@ export default function ClientForm({ trainer, onBack }) {
     setStep((current) => current - 1);
   }
 
-  function submitForm() {
+  async function submitForm() {
+    if (submitting) return;
+
+    setSubmitting(true);
+
     const entry = {
       ...form,
       id: Date.now(),
       submittedAt: new Date().toISOString(),
     };
-    const saved = JSON.parse(localStorage.getItem('ignite_clients_v1') || '[]');
-    saved.unshift(entry);
-    localStorage.setItem('ignite_clients_v1', JSON.stringify(saved));
-    setFinished(true);
+
+    try {
+      await saveClient(entry);
+      setFinished(true);
+      if (typeof onSaved === 'function') {
+        onSaved(entry);
+      }
+    } catch (error) {
+      console.error('Failed to save client remotely:', error);
+      setFinished(true);
+      if (typeof onSaved === 'function') {
+        onSaved(entry);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (finished) {
@@ -171,25 +207,33 @@ export default function ClientForm({ trainer, onBack }) {
                   style={{ paddingLeft: 46 }}
                   placeholder="seuinstagram"
                   value={form.instagram.replace('@', '')}
-                  onChange={(event) => changeField('instagram', event.target.value ? `@${event.target.value.replace('@', '')}` : '')}
+                  onChange={(event) => {
+                    const nextValue = event.target.value.replace(/[^a-zA-Z0-9._]/g, '').slice(0, 30);
+                    changeField('instagram', nextValue ? `@${nextValue}` : '');
+                  }}
                   autoFocus
                 />
               </div>
               <p style={{ color: '#888', fontSize: 11, marginTop: 10, letterSpacing: '0.08em', lineHeight: 1.6 }}>
-                Utilizado para acompanhamento e comunicação.
+                Apenas letras, números, ponto e underline. Máx. 30 caracteres.
               </p>
             </div>
           )}
 
           {step === 3 && (
-            <input
-              className="input-field"
-              placeholder="+351 9XX XXX XXX"
-              type="tel"
-              value={form.phone}
-              onChange={(event) => changeField('phone', event.target.value)}
-              autoFocus
-            />
+            <>
+              <input
+                className="input-field"
+                placeholder="+351 9XX XXX XXX"
+                type="tel"
+                value={form.phone}
+                onChange={(event) => changeField('phone', event.target.value.replace(/[^\d+().\s-]/g, '').slice(0, 20))}
+                autoFocus
+              />
+              <p style={{ color: '#888', fontSize: 11, marginTop: 4, letterSpacing: '0.08em', lineHeight: 1.6 }}>
+                Aceita números internacionais com +, espaços, parêntesis e hífen.
+              </p>
+            </>
           )}
 
           {step === 4 && (
@@ -249,14 +293,20 @@ export default function ClientForm({ trainer, onBack }) {
               <textarea
                 className="textarea-field"
                 rows={6}
+                maxLength={MAX_DIFFICULTY_LENGTH}
                 placeholder="Ex: Falta de motivação, não sei por onde começar, pouco tempo disponível..."
                 value={form.difficulty}
-                onChange={(event) => changeField('difficulty', event.target.value)}
+                onChange={(event) => changeField('difficulty', event.target.value.slice(0, MAX_DIFFICULTY_LENGTH))}
                 autoFocus
               />
-              <p style={{ color: '#888', fontSize: 11, letterSpacing: '0.06em', lineHeight: 1.6 }}>
-                Esta informação é confidencial e permite-nos personalizar o teu programa de raiz.
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <p style={{ color: '#888', fontSize: 11, letterSpacing: '0.06em', lineHeight: 1.6 }}>
+                  Esta informação é confidencial e permite-nos personalizar o teu programa de raiz.
+                </p>
+                <span style={{ color: form.difficulty.length >= MAX_DIFFICULTY_LENGTH ? '#6aaa55' : '#888', fontSize: 11 }}>
+                  {form.difficulty.length}/{MAX_DIFFICULTY_LENGTH}
+                </span>
+              </div>
             </>
           )}
         </div>
@@ -267,8 +317,8 @@ export default function ClientForm({ trainer, onBack }) {
               Continuar
             </PrimaryButton>
           ) : (
-            <PrimaryButton onClick={submitForm} disabled={!isStepValid(step, form)}>
-              Submeter Candidatura
+            <PrimaryButton onClick={submitForm} disabled={!isStepValid(step, form) || submitting}>
+              {submitting ? 'A enviar…' : 'Submeter Candidatura'}
             </PrimaryButton>
           )}
         </div>
